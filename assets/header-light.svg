@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Hello, I'm AllenCC.</title>
+  <desc id="desc">Exploring Embodied AI. Building with code. Sky-blue banner with an abstract trajectory and connected points.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1200" y2="300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F2FAFF"/><stop offset="1" stop-color="#DEF3FF"/>
+    </linearGradient>
+    <linearGradient id="trajectory" x1="783" y1="237" x2="1137" y2="59" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7DD3FC"/><stop offset=".55" stop-color="#0EA5E9"/><stop offset="1" stop-color="#0284C7"/>
+    </linearGradient>
+    <pattern id="dots" x="16" y="16" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#7DBDDC" opacity=".3"/>
+    </pattern>
+    <clipPath id="clip"><rect x="1" y="1" width="1198" height="298" rx="24"/></clipPath>
+  </defs>
+  <g clip-path="url(#clip)">
+    <rect width="1200" height="300" fill="url(#background)"/>
+    <rect x="758" width="442" height="300" fill="url(#dots)"/>
+    <circle cx="1000" cy="150" r="171" stroke="#A7DDF6" stroke-width="1" opacity=".65"/>
+    <circle cx="1000" cy="150" r="128" stroke="#A7DDF6" stroke-width="1" opacity=".75"/>
+    <circle cx="1000" cy="150" r="84" stroke="#A7DDF6" stroke-width="1" opacity=".8"/>
+    <path d="M790 150H1170M1000 20V280" stroke="#B6E2F5" stroke-dasharray="4 7"/>
+    <path d="M793 240C816 216 864 235 881 196C909 131 925 118 969 139C1015 161 1026 179 1061 133C1087 98 1097 65 1140 60" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" opacity=".65"/>
+    <path d="M793 240C816 216 864 235 881 196C909 131 925 118 969 139C1015 161 1026 179 1061 133C1087 98 1097 65 1140 60" stroke="url(#trajectory)" stroke-width="4" stroke-linecap="round"/>
+    <g fill="#F4FBFF" stroke="#38BDF8" stroke-width="3">
+      <circle cx="793" cy="240" r="6"/><circle cx="881" cy="196" r="7"/><circle cx="969" cy="139" r="7"/><circle cx="1061" cy="133" r="7"/>
+    </g>
+    <circle cx="1140" cy="60" r="17" fill="#0EA5E9" opacity=".12"/>
+    <circle cx="1140" cy="60" r="7" fill="#0284C7"/>
+    <path d="M856 66H868M862 60V72M1122 228H1134M1128 222V234" stroke="#7DBDDC" stroke-width="1.5" stroke-linecap="round"/>
+    <rect x="58" y="46" width="8" height="8" rx="2" fill="#0EA5E9"/>
+    <text x="78" y="56" fill="#39708E" font-family="'Segoe UI', Arial, sans-serif" font-size="14" font-weight="600" letter-spacing="2.7">ALLENCC / GITHUB PROFILE</text>
+    <text x="56" y="139" fill="#123A54" font-family="'Segoe UI', Arial, sans-serif" font-size="66" font-weight="700" letter-spacing="-2.5">Hello, I'm AllenCC.</text>
+    <text x="59" y="185" fill="#366580" font-family="'Segoe UI', Arial, sans-serif" font-size="25" font-weight="400">Exploring Embodied AI · Building with code.</text>
+    <rect x="59" y="223" width="34" height="3" rx="1.5" fill="#0EA5E9"/>
+    <text x="108" y="229" fill="#527B92" font-family="'Segoe UI', Arial, sans-serif" font-size="14" letter-spacing="1.7">IDEAS INTO MOTION</text>
+  </g>
+  <rect x=".5" y=".5" width="1199" height="299" rx="24" stroke="#C5E7F8"/>
+</svg>
