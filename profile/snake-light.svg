@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="184" viewBox="0 0 920 184" role="img" aria-labelledby="title desc">
+  <title id="title">Waiting for first GitHub sync</title>
+  <desc id="desc">No contribution calendar has been generated yet. This is an explicit waiting state, not a contribution graph. The GitHub Actions workflow will replace it with the real contribution snake after its first successful run.</desc>
+  <rect x="0.5" y="0.5" width="919" height="183" rx="16" fill="#ffffff" stroke="#bae6fd"/>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif"><text x="28" y="39" font-size="17" font-weight="600" fill="#0284c7">Contribution Snake</text><text x="28" y="87" font-size="24" font-weight="600" fill="#334155">Waiting for first GitHub sync</text><text x="28" y="116" font-size="14" fill="#64748b">Your contribution animation will appear after the first successful update.</text><path d="M28 154 H490 C523 154 523 139 556 139 H611 C644 139 644 154 677 154 H889" fill="none" stroke="#bae6fd" stroke-width="3" stroke-linecap="round"/></g>
+</svg>
