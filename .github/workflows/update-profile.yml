@@ -1,0 +1,138 @@
+name: Update profile images
+
+on:
+  workflow_dispatch:
+  schedule:
+    # UTC 00:23 = Beijing / Shanghai 08:23. GitHub may start scheduled runs late.
+    - cron: "23 0 * * *"
+  push:
+    branches: [main]
+    paths:
+      - README.md
+      - .github/workflows/update-profile.yml
+
+# Only this job receives write permission, to commit the six generated SVGs.
+permissions: {}
+
+concurrency:
+  group: profile-images-main
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.repository == 'Allencc5658/Allencc5658' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out the profile repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: main
+
+      - name: Prepare a fresh build directory
+        run: mkdir .profile-build
+
+      - name: Generate activity card for light mode
+        uses: stats-organization/github-readme-stats-action@e856fc8de9d7729b463c468911e232cfbdc3d55e # v2.0.2
+        with:
+          card: stats
+          options: '{"username":"Allencc5658","show_icons":true,"hide_rank":true,"custom_title":"GitHub Activity","title_color":"0284c7","icon_color":"0284c7","text_color":"334155","bg_color":"ffffff","border_color":"bae6fd","border_radius":16,"card_width":440,"disable_animations":true}'
+          path: .profile-build/stats-light.svg
+          token: ${{ secrets.GITHUB_TOKEN }}
+          core_version: "2.1.3"
+          fail_on_error: "true"
+
+      - name: Generate activity card for dark mode
+        uses: stats-organization/github-readme-stats-action@e856fc8de9d7729b463c468911e232cfbdc3d55e # v2.0.2
+        with:
+          card: stats
+          options: '{"username":"Allencc5658","show_icons":true,"hide_rank":true,"custom_title":"GitHub Activity","title_color":"7dd3fc","icon_color":"38bdf8","text_color":"cbd5e1","bg_color":"0d1117","border_color":"164e63","border_radius":16,"card_width":440,"disable_animations":true}'
+          path: .profile-build/stats-dark.svg
+          token: ${{ secrets.GITHUB_TOKEN }}
+          core_version: "2.1.3"
+          fail_on_error: "true"
+
+      - name: Generate language card for light mode
+        uses: stats-organization/github-readme-stats-action@e856fc8de9d7729b463c468911e232cfbdc3d55e # v2.0.2
+        with:
+          card: top-langs
+          options: '{"username":"Allencc5658","layout":"compact","langs_count":6,"custom_title":"Languages in Public Repos","title_color":"0284c7","text_color":"334155","bg_color":"ffffff","border_color":"bae6fd","border_radius":16,"card_width":440,"disable_animations":true}'
+          path: .profile-build/languages-light.svg
+          token: ${{ secrets.GITHUB_TOKEN }}
+          core_version: "2.1.3"
+          fail_on_error: "true"
+
+      - name: Generate language card for dark mode
+        uses: stats-organization/github-readme-stats-action@e856fc8de9d7729b463c468911e232cfbdc3d55e # v2.0.2
+        with:
+          card: top-langs
+          options: '{"username":"Allencc5658","layout":"compact","langs_count":6,"custom_title":"Languages in Public Repos","title_color":"7dd3fc","text_color":"cbd5e1","bg_color":"0d1117","border_color":"164e63","border_radius":16,"card_width":440,"disable_animations":true}'
+          path: .profile-build/languages-dark.svg
+          token: ${{ secrets.GITHUB_TOKEN }}
+          core_version: "2.1.3"
+          fail_on_error: "true"
+
+      - name: Generate blue contribution snakes
+        uses: Platane/snk/svg-only@d8f6715049803e982ee5ff501b6b9b7d5deeb09b # v3.5.0
+        with:
+          github_user_name: Allencc5658
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          outputs: |
+            .profile-build/snake-light.svg?palette=github-light&color_snake=#0284c7&color_dots=#e0f2fe,#bae6fd,#7dd3fc,#38bdf8,#0284c7
+            .profile-build/snake-dark.svg?palette=github-dark&color_snake=#7dd3fc&color_dots=#161b22,#0c4a6e,#0369a1,#0284c7,#38bdf8
+
+      # Default success() behavior is intentional: any failed generator skips
+      # validation and commit, leaving the published images unchanged.
+      - name: Validate all six SVGs before replacing published images
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+          import xml.etree.ElementTree as ET
+
+          names = [
+              "stats-light.svg", "stats-dark.svg",
+              "languages-light.svg", "languages-dark.svg",
+              "snake-light.svg", "snake-dark.svg",
+          ]
+          build = Path(".profile-build")
+          for name in names:
+              source = build / name
+              text = source.read_text(encoding="utf-8")
+              root = ET.fromstring(text)
+              if root.tag != "{http://www.w3.org/2000/svg}svg":
+                  raise ValueError(f"{name} is not an SVG")
+              if len(text.encode("utf-8")) < 300:
+                  raise ValueError(f"{name} is unexpectedly small")
+              if "something went wrong" in text.lower():
+                  raise ValueError(f"{name} contains an API error card")
+              print(f"Validated {name}")
+
+          # No published file is touched until every output passes validation.
+          published = Path("profile")
+          published.mkdir(exist_ok=True)
+          for name in names:
+              shutil.copyfile(build / name, published / name)
+          PY
+
+      - name: Commit the complete image set if it changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- \
+            profile/stats-light.svg profile/stats-dark.svg \
+            profile/languages-light.svg profile/languages-dark.svg \
+            profile/snake-light.svg profile/snake-dark.svg
+          if git diff --cached --quiet; then
+            echo "The profile images are already up to date."
+            exit 0
+          fi
+          git commit -m "chore: refresh profile images [skip ci]"
+          # Incorporate a README edit made during generation, without force push.
+          git pull --rebase origin main
+          git push origin HEAD:main
