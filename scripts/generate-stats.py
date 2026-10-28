@@ -1,15 +1,19 @@
-"""Generate four sky-blue cards from public REST data, without credentials."""
+"""Generate four sky-blue cards from public REST data with bounded retries."""
 
 import argparse
 from collections import Counter
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from html import escape
+from http.client import HTTPException
 import json
+import os
 from pathlib import Path
 import sys
+import time
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
-from urllib.request import ProxyHandler, Request, build_opener
+from urllib.parse import quote, urlsplit
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 import xml.etree.ElementTree as ET
 
 USERNAME = "Allencc5658"
@@ -34,26 +38,109 @@ def nonnegative_int(value, label):
     return value
 
 
+class GitHubRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # An authenticated request must never forward its token to another host.
+        target = urlsplit(newurl)
+        if target.scheme != "https" or target.netloc != "api.github.com":
+            raise HTTPError(req.full_url, 403, "Blocked redirect outside GitHub API", headers, None)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 class PublicAPI:
-    def __init__(self):
-        # No Authorization header, token environment reads, netrc or proxy auth.
-        self.opener = build_opener(ProxyHandler({}))
+    MAX_ATTEMPTS = 4
+    MAX_RETRY_WAIT = 180  # Shared across the whole statistics build, in seconds.
+
+    def __init__(self, token=None):
+        self.token = (os.environ.get("GITHUB_TOKEN", "") if token is None else token).strip()
+        if os.environ.get("GITHUB_ACTIONS") == "true" and not self.token:
+            raise RuntimeError("GITHUB_TOKEN is missing in Actions; keeping published images.")
+        self.opener = build_opener(ProxyHandler({}), GitHubRedirectHandler())
+        self.waited = 0
+
+    def safe_message(self, value):
+        text = str(value)
+        if self.token:
+            text = text.replace(self.token, "[REDACTED]")
+        return " ".join(text.split())[:300]
+
+    def delay(self, headers, attempt, rate_limited):
+        delays = []
+        retry_after = headers.get("Retry-After")
+        if retry_after is not None:
+            try:
+                delays.append(max(0, int(retry_after)))
+            except ValueError:
+                try:
+                    delays.append(max(0, parsedate_to_datetime(retry_after).timestamp() - time.time() + 1))
+                except (TypeError, ValueError, OverflowError):
+                    pass
+        if headers.get("X-RateLimit-Remaining") == "0":
+            try:
+                delays.append(max(0, int(headers["X-RateLimit-Reset"]) - time.time() + 1))
+            except (KeyError, ValueError, OverflowError):
+                pass
+        # A secondary limit without usable timing information requires >= 60s.
+        fallback = (60 if rate_limited else 2) * 2 ** (attempt - 1)
+        return max([2 ** attempt, *delays]) if delays else fallback
+
+    def retry(self, detail, attempt, delay):
+        print(f"GitHub API attempt {attempt}/{self.MAX_ATTEMPTS}: {detail}", file=sys.stderr)
+        if attempt >= self.MAX_ATTEMPTS:
+            raise RuntimeError(f"{detail}; retry attempts exhausted; keeping published images.") from None
+        if self.waited + delay > self.MAX_RETRY_WAIT:
+            raise RuntimeError(
+                f"{detail}; required wait {delay:.0f}s exceeds remaining retry budget "
+                f"{self.MAX_RETRY_WAIT - self.waited:.0f}s; keeping published images."
+            ) from None
+        print(f"Retrying after {delay:.0f}s.", file=sys.stderr)
+        time.sleep(delay)
+        self.waited += delay
 
     def get(self, path):
-        request = Request(API + path, headers={
+        headers = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
             "User-Agent": "Allencc5658-profile-public-stats",
-        })
-        try:
-            with self.opener.open(request, timeout=30) as response:
-                result = json.load(response)
-                return result, response.headers.get("Link", "")
-        except HTTPError as error:
-            # Never turn permission/rate-limit errors into zero-filled cards.
-            raise RuntimeError(f"Public GitHub API returned HTTP {error.code} for {path}; keeping published images.") from error
-        except (URLError, TimeoutError, json.JSONDecodeError) as error:
-            raise RuntimeError(f"Public GitHub API request failed for {path}: {error}") from error
+        }
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+        for attempt in range(1, self.MAX_ATTEMPTS + 1):
+            request = Request(API + path, headers=headers)
+            try:
+                with self.opener.open(request, timeout=30) as response:
+                    result = json.load(response)
+                    return result, response.headers.get("Link", "")
+            except HTTPError as error:
+                response_headers = error.headers or {}
+                try:
+                    payload = json.loads(error.read(4096).decode("utf-8", errors="replace"))
+                    message = payload.get("message", error.reason) if isinstance(payload, dict) else error.reason
+                except (ValueError, OSError, HTTPException):
+                    message = error.reason
+                finally:
+                    error.close()
+                rate_limited = error.code == 429 or (error.code == 403 and (
+                    response_headers.get("X-RateLimit-Remaining") == "0"
+                    or response_headers.get("Retry-After") is not None
+                    or "rate limit" in str(message).lower()
+                    or "abuse detection" in str(message).lower()
+                ))
+                diagnostic = "; ".join(
+                    f"{key}={self.safe_message(response_headers[key])}"
+                    for key in ("X-RateLimit-Remaining", "X-RateLimit-Reset", "Retry-After", "X-GitHub-Request-Id")
+                    if key in response_headers
+                )
+                detail = f"HTTP {error.code} for {path}: {self.safe_message(message)}"
+                detail += f"; auth={'token' if self.token else 'anonymous'}"
+                if diagnostic:
+                    detail += f"; {diagnostic}"
+                if not rate_limited and error.code not in (500, 502, 503, 504):
+                    raise RuntimeError(f"{detail}; not retryable; keeping published images.") from None
+                self.retry(detail, attempt, self.delay(response_headers, attempt, rate_limited))
+            except (URLError, TimeoutError, ConnectionError, HTTPException, json.JSONDecodeError, UnicodeDecodeError) as error:
+                detail = f"{type(error).__name__} for {path}: {self.safe_message(error)}"
+                self.retry(detail, attempt, 2 ** attempt)
 
 
 def fetch_summary(api):
@@ -82,7 +169,7 @@ def fetch_summary(api):
         owned.append(repo)
     originals = [repo for repo in owned if repo["fork"] is False]
     if len(originals) > MAX_LANGUAGE_REPOS:
-        raise RuntimeError("More than 45 public non-fork repositories; revise the unauthenticated API budget before expanding scope.")
+        raise RuntimeError("More than 45 public non-fork repositories; revise the API request budget before expanding scope.")
     languages = Counter()
     for repo in originals:
         data, _ = api.get(f"/repos/{USERNAME}/{quote(repo['name'], safe='')}/languages")

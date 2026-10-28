@@ -11,6 +11,7 @@ on:
       - README.md
       - .github/workflows/update-profile.yml
       - scripts/generate-stats.py
+      - tests/test_generate_stats.py
 
 # Only this job receives write permission, to commit the six generated SVGs.
 permissions: {}
@@ -38,7 +39,12 @@ jobs:
       - name: Prepare a fresh build directory
         run: mkdir .profile-build
 
-      - name: Generate public statistics cards without credentials
+      - name: Test statistics error handling
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Generate public statistics cards
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 scripts/generate-stats.py
 
       - name: Generate blue contribution snakes
